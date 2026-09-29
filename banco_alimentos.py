@@ -5,160 +5,117 @@ TIPOS_DONANTE = ["empresa", "mercado", "persona"]
 TIPOS_ORGANIZACION = ["comedor popular", "albergue", "olla comun", "asociacion", "otra"]
 
 
-def buscar_por_codigo(lista, codigo):
-    for elemento in lista:
-        if elemento["codigo"] == codigo:
-            return elemento
+# ------------------------------------------------------------
+# FUNCIONES AUXILIARES
+# ------------------------------------------------------------
+def buscar(lista, codigo):
+    for e in lista:
+        if e["codigo"] == codigo:
+            return e
     return None
 
 
-def elegir_opcion(titulo, opciones, permitir_vacio=False):
-    print(titulo)
+def leer(mensaje, actual=None):
+    """Lee un texto no vacio. En edicion (actual) Enter mantiene el valor."""
+    while True:
+        t = input(mensaje).strip()
+        if t != "":
+            return t
+        if actual is not None:
+            return actual
+        print("  Error: el campo no puede estar vacio.")
+
+
+def leer_entero(mensaje, actual=None):
+    while True:
+        t = leer(mensaje, actual)
+        if str(t).isdigit() and int(t) > 0:
+            return int(t)
+        print("  Error: ingrese un numero entero mayor que cero.")
+
+
+def elegir(mensaje, opciones, actual=None):
     for i in range(len(opciones)):
         print(f"   {i + 1}. {opciones[i]}")
     while True:
-        texto = input("  Seleccione una opcion: ").strip()
-        if texto == "" and permitir_vacio:
-            return None
-        if texto.isdigit() and 1 <= int(texto) <= len(opciones):
-            return opciones[int(texto) - 1]
+        t = leer(mensaje, actual)
+        if t in opciones:
+            return t
+        if t.isdigit() and 1 <= int(t) <= len(opciones):
+            return opciones[int(t) - 1]
         print(f"  Error: elija un numero entre 1 y {len(opciones)}.")
+
+
+def leer_codigo(lista, mensaje, actual=None):
+    """Lee un codigo que no se repita en la lista."""
+    while True:
+        c = leer(mensaje, actual).upper()
+        if c == actual or buscar(lista, c) is None:
+            return c
+        print(f"  Error: el codigo {c} ya esta registrado.")
 
 
 # ------------------------------------------------------------
 # 1. REGISTRAR / GESTIONAR DONANTES
 # ------------------------------------------------------------
 def registrar_donante():
-    print("\n--- REGISTRAR DONANTE ---")
-    codigo = input("Codigo del donante: ").strip().upper()
-    while codigo == "" or buscar_por_codigo(donantes, codigo) is not None:
-        print("  Error: codigo vacio o ya registrado.")
-        codigo = input("Codigo del donante: ").strip().upper()
-
-    nombre = input("Nombre o razon social: ").strip()
-    while nombre == "":
-        print("  Error: el nombre no puede estar vacio.")
-        nombre = input("Nombre o razon social: ").strip()
-
-    tipo = elegir_opcion("Tipo de donante:", TIPOS_DONANTE)
-
-    contacto = input("Contacto (telefono o correo): ").strip()
-    while contacto == "":
-        print("  Error: el contacto no puede estar vacio.")
-        contacto = input("Contacto (telefono o correo): ").strip()
-
-    donantes.append({"codigo": codigo, "nombre": nombre, "tipo": tipo, "contacto": contacto})
-    print(f"Donante {codigo} registrado correctamente.")
+    donantes.append({
+        "codigo": leer_codigo(donantes, "Codigo del donante: "),
+        "nombre": leer("Nombre o razon social: "),
+        "tipo": elegir("Tipo de donante: ", TIPOS_DONANTE),
+        "contacto": leer("Contacto: "),
+    })
+    print("Donante registrado correctamente.")
 
 
 def listar_donantes():
-    print("\n--- LISTA DE DONANTES ---")
-    if len(donantes) == 0:
+    if not donantes:
         print("No hay donantes registrados.")
-        return
-    print(f"{'CODIGO':<10}{'NOMBRE / RAZON SOCIAL':<30}{'TIPO':<12}{'CONTACTO':<25}")
     for d in donantes:
-        print(f"{d['codigo']:<10}{d['nombre']:<30}{d['tipo']:<12}{d['contacto']:<25}")
+        print(f"{d['codigo']:<8}{d['nombre']:<30}{d['tipo']:<10}{d['contacto']}")
 
 
 def editar_donante():
-    print("\n--- EDITAR DONANTE ---")
-    codigo = input("Codigo del donante a editar: ").strip().upper()
-    d = buscar_por_codigo(donantes, codigo)
+    d = buscar(donantes, input("Codigo del donante a editar: ").strip().upper())
     if d is None:
-        print(f"No existe un donante con codigo {codigo}.")
+        print("No existe ese donante.")
         return
-
-    print("Deje el campo vacio (Enter) para mantener el valor actual.")
-
-    nuevo_codigo = input(f"Codigo [{d['codigo']}]: ").strip().upper()
-    if nuevo_codigo != "" and nuevo_codigo != d["codigo"]:
-        if buscar_por_codigo(donantes, nuevo_codigo) is not None:
-            print(f"  Error: el codigo {nuevo_codigo} ya esta registrado. Se mantiene {d['codigo']}.")
-        else:
-            d["codigo"] = nuevo_codigo
-
-    nombre = input(f"Nombre o razon social [{d['nombre']}]: ").strip()
-    if nombre != "":
-        d["nombre"] = nombre
-
-    tipo = elegir_opcion(f"Tipo de donante [{d['tipo']}]:", TIPOS_DONANTE, True)
-    if tipo is not None:
-        d["tipo"] = tipo
-
-    contacto = input(f"Contacto [{d['contacto']}]: ").strip()
-    if contacto != "":
-        d["contacto"] = contacto
-
-    print(f"Donante {d['codigo']} actualizado correctamente.")
+    print("Presione Enter para mantener el valor actual.")
+    d["codigo"] = leer_codigo(donantes, f"Codigo [{d['codigo']}]: ", d["codigo"])
+    d["nombre"] = leer(f"Nombre [{d['nombre']}]: ", d["nombre"])
+    d["tipo"] = elegir(f"Tipo [{d['tipo']}]: ", TIPOS_DONANTE, d["tipo"])
+    d["contacto"] = leer(f"Contacto [{d['contacto']}]: ", d["contacto"])
+    print("Donante actualizado correctamente.")
 
 
 # ------------------------------------------------------------
 # 2. REGISTRAR / GESTIONAR BENEFICIARIOS
 # ------------------------------------------------------------
 def registrar_beneficiario():
-    print("\n--- REGISTRAR ORGANIZACION BENEFICIARIA ---")
-    codigo = input("Codigo de la organizacion: ").strip().upper()
-    while codigo == "" or buscar_por_codigo(beneficiarios, codigo) is not None:
-        print("  Error: codigo vacio o ya registrado.")
-        codigo = input("Codigo de la organizacion: ").strip().upper()
-
-    nombre = input("Nombre de la organizacion: ").strip()
-    while nombre == "":
-        print("  Error: el nombre no puede estar vacio.")
-        nombre = input("Nombre de la organizacion: ").strip()
-
-    tipo = elegir_opcion("Tipo de organizacion:", TIPOS_ORGANIZACION)
-
-    personas = input("Cantidad estimada de personas atendidas: ").strip()
-    while not personas.isdigit() or int(personas) <= 0:
-        print("  Error: ingrese un numero entero mayor que cero.")
-        personas = input("Cantidad estimada de personas atendidas: ").strip()
-
-    beneficiarios.append({"codigo": codigo, "nombre": nombre, "tipo": tipo, "personas": int(personas)})
-    print(f"Organizacion beneficiaria {codigo} registrada correctamente.")
+    beneficiarios.append({
+        "codigo": leer_codigo(beneficiarios, "Codigo de la organizacion: "),
+        "nombre": leer("Nombre de la organizacion: "),
+        "tipo": elegir("Tipo de organizacion: ", TIPOS_ORGANIZACION),
+        "personas": leer_entero("Personas atendidas: "),
+    })
+    print("Organizacion registrada correctamente.")
 
 
 def listar_beneficiarios():
-    print("\n--- LISTA DE ORGANIZACIONES BENEFICIARIAS ---")
-    if len(beneficiarios) == 0:
-        print("No hay organizaciones beneficiarias registradas.")
-        return
-    print(f"{'CODIGO':<10}{'NOMBRE':<30}{'TIPO':<18}{'PERSONAS':>10}")
+    if not beneficiarios:
+        print("No hay organizaciones registradas.")
     for b in beneficiarios:
-        print(f"{b['codigo']:<10}{b['nombre']:<30}{b['tipo']:<18}{b['personas']:>10}")
+        print(f"{b['codigo']:<8}{b['nombre']:<30}{b['tipo']:<18}{b['personas']}")
 
 
 def editar_beneficiario():
-    print("\n--- EDITAR ORGANIZACION BENEFICIARIA ---")
-    codigo = input("Codigo de la organizacion a editar: ").strip().upper()
-    b = buscar_por_codigo(beneficiarios, codigo)
+    b = buscar(beneficiarios, input("Codigo de la organizacion a editar: ").strip().upper())
     if b is None:
-        print(f"No existe una organizacion con codigo {codigo}.")
+        print("No existe esa organizacion.")
         return
-
-    print("Deje el campo vacio (Enter) para mantener el valor actual.")
-
-    nuevo_codigo = input(f"Codigo [{b['codigo']}]: ").strip().upper()
-    if nuevo_codigo != "" and nuevo_codigo != b["codigo"]:
-        if buscar_por_codigo(beneficiarios, nuevo_codigo) is not None:
-            print(f"  Error: el codigo {nuevo_codigo} ya esta registrado. Se mantiene {b['codigo']}.")
-        else:
-            b["codigo"] = nuevo_codigo
-
-    nombre = input(f"Nombre [{b['nombre']}]: ").strip()
-    if nombre != "":
-        b["nombre"] = nombre
-
-    tipo = elegir_opcion(f"Tipo de organizacion [{b['tipo']}]:", TIPOS_ORGANIZACION, True)
-    if tipo is not None:
-        b["tipo"] = tipo
-
-    personas = input(f"Personas atendidas [{b['personas']}]: ").strip()
-    while personas != "" and (not personas.isdigit() or int(personas) <= 0):
-        print("  Error: ingrese un numero entero mayor que cero.")
-        personas = input(f"Personas atendidas [{b['personas']}]: ").strip()
-    if personas != "":
-        b["personas"] = int(personas)
-
-    print(f"Organizacion {b['codigo']} actualizada correctamente.")
+    print("Presione Enter para mantener el valor actual.")
+    b["codigo"] = leer_codigo(beneficiarios, f"Codigo [{b['codigo']}]: ", b["codigo"])
+    b["nombre"] = leer(f"Nombre [{b['nombre']}]: ", b["nombre"])
+    b["tipo"] = elegir(f"Tipo [{b['tipo']}]: ", TIPOS_ORGANIZACION, b["tipo"])
+    b["personas"] = leer_entero(f"Personas atendidas [{b['personas']}]: ", b["personas"])
+    print("Organizacion actualizada correctamente.")
