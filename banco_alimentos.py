@@ -144,8 +144,15 @@ def fechaADias(fecha):
     return total
 
 
+def fechaHoy():
+    """Pide la fecha de hoy solo la primera vez que se necesita."""
+    if sistema["hoy"] == "":
+        sistema["hoy"] = leerFecha("Ingrese la fecha de hoy (AAAA-MM-DD): ")
+    return sistema["hoy"]
+
+
 def diasParaVencer(codLote):
-    return fechaADias(lotes[codLote]["vencimiento"]) - fechaADias(sistema["hoy"])
+    return fechaADias(lotes[codLote]["vencimiento"]) - fechaADias(fechaHoy())
 
 
 def estadoLote(codLote):
@@ -346,7 +353,7 @@ def lotesConEstado(estado):
 
 
 def reporteStock():
-    print(f"\n--- STOCK DISPONIBLE POR CATEGORIA Y PRODUCTO (al {sistema['hoy']}) ---")
+    print(f"\n--- STOCK DISPONIBLE POR CATEGORIA Y PRODUCTO (al {fechaHoy()}) ---")
     stock = {}
     for codLote, datos in lotes.items():
         if estadoLote(codLote) != "Vencido" and datos["disponible"] > 0:
@@ -360,7 +367,7 @@ def reporteStock():
 
 
 def listarLotes():
-    print(f"\n--- LOTES Y SU ESTADO (al {sistema['hoy']}) ---")
+    print(f"\n--- LOTES Y SU ESTADO (al {fechaHoy()}) ---")
     print(ENCABEZADO_LOTES)
     for codLote in lotes:
         imprimirLote(codLote)
@@ -511,7 +518,6 @@ def menuReportes():
 
 # Programa principal
 print(f"{'SISTEMA DE GESTION DE BANCO DE ALIMENTOS':^50}")
-sistema["hoy"] = leerFecha("Ingrese la fecha de hoy (AAAA-MM-DD): ")
 menu("MENU PRINCIPAL", [("Registrar / gestionar donantes", menuDonantes),
                         ("Registrar / gestionar beneficiarios", menuBeneficiarios),
                         ("Registrar productos", menuProductos),
