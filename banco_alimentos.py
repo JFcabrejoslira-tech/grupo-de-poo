@@ -11,7 +11,7 @@ lotes = {}          # {codLote: {"producto", "donante", "recibido", "disponible"
 donaciones = []     # [{"donante", "fecha", "producto", "lote", "cantidad"}]
 entregas = []       # [{"beneficiario", "fecha", "producto", "lote", "cantidad"}]
 acumulados = {"recibido": 0.0, "entregado": 0.0, "perdido": 0.0}
-sistema = {"hoy": ""}  # fecha actual, se pide al iniciar el programa
+sistema = {"hoy": ""}  # fecha actual, se pide la primera vez que se necesita
 
 TIPOS_DONANTE = ("Empresa", "Mercado", "Persona")
 TIPOS_ORGANIZACION = ("Comedor Popular", "Albergue", "Olla Comun", "Asociacion", "Otra")
