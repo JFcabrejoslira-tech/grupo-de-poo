@@ -1,609 +1,397 @@
-# ============================================================
 # CASO 3: SISTEMA DE GESTION DE BANCO DE ALIMENTOS Y DONACIONES
 # Version basica (sin POO): funciones, listas, tuplas y diccionarios
-# ============================================================
 
-# ------------------------------------------------------------
-# DATOS DEL SISTEMA (se guardan en memoria)
-# ------------------------------------------------------------
-# Diccionarios: la llave es el codigo, asi no se pueden repetir codigos
+# ---------------- DATOS ----------------
 donantes = {}       # {codigo: {"nombre", "tipo", "contacto"}}
 beneficiarios = {}  # {codigo: {"nombre", "tipo", "personas"}}
 productos = {}      # {codigo: {"nombre", "categoria", "unidad"}}
-lotes = {}          # {codigoLote: {"producto", "donante", "recibido", "disponible", "perdido", "vencimiento"}}
+lotes = {}          # {codigo: {"producto", "disponible", "perdido", "vence"}}
+donaciones = []     # [{"donante", "fecha", "producto", "lote", "cantidad"}]
+entregas = []       # [{"beneficiario", "fecha", "producto", "lote", "cantidad"}]
+acumulados = {"recibido": 0, "entregado": 0, "perdido": 0}
+sistema = {"hoy": ""}  # la fecha de hoy se pide la primera vez que se necesita
 
-# Listas: historial de movimientos
-donaciones = []     # cada elemento: {"donante", "fecha", "producto", "lote", "cantidad"}
-entregas = []       # cada elemento: {"beneficiario", "fecha", "producto", "lote", "cantidad"}
-
-# Totales acumulados del sistema
-acumulados = {"recibido": 0.0, "entregado": 0.0, "perdido": 0.0}
-
-# Fecha de hoy: empieza vacia y se pide la primera vez que se necesita
-sistema = {"hoy": ""}
-
-# Tuplas con las opciones validas
 TIPOS_DONANTE = ("Empresa", "Mercado", "Persona")
-TIPOS_ORGANIZACION = ("Comedor Popular", "Albergue", "Olla Comun", "Asociacion", "Otra")
+TIPOS_ORGANIZACION = ("Comedor Popular", "Albergue", "Olla Comun", "Otra")
 CATEGORIAS = ("Granos", "Conservas", "Lacteos", "Frutas/Verduras", "Otra")
-UNIDADES = ("Kg", "Litros", "Unidades", "Cajas")
-
-# Criterio del grupo: un lote esta "proximo a vencer" si le quedan 7 dias o menos
-DIAS_ALERTA = 7
+UNIDADES = ("Kg", "Litros", "Unidades")
+DIAS_ALERTA = 7  # proximo a vencer = 7 dias o menos
 
 
-# ------------------------------------------------------------
-# FUNCIONES PARA LEER Y VALIDAR DATOS
-# ------------------------------------------------------------
+# ---------------- LECTURA Y VALIDACION ----------------
 def leerTexto(mensaje):
-    """Pide un texto y no acepta que este vacio."""
     texto = input(mensaje).strip()
     while texto == "":
-        print("Error: el campo no puede estar vacio.")
+        print("Error: no puede estar vacio.")
         texto = input(mensaje).strip()
     return texto
 
 
 def leerEntero(mensaje):
-    """Pide un numero entero mayor que cero."""
-    while True:
-        try:
-            numero = int(input(mensaje))
-            if numero > 0:
-                return numero
-            print("Error: debe ser mayor que cero.")
-        except ValueError:
-            print("Error: debe ingresar un numero entero.")
+    texto = input(mensaje).strip()
+    while not texto.isdigit() or int(texto) == 0:
+        print("Error: ingrese un numero entero mayor que cero.")
+        texto = input(mensaje).strip()
+    return int(texto)
 
 
-def leerDecimal(mensaje):
-    """Pide una cantidad (puede tener decimales) mayor que cero."""
+def leerCantidad(mensaje):
     while True:
         try:
             numero = float(input(mensaje))
-            if numero > 0:
-                return numero
-            print("Error: debe ser mayor que cero.")
         except ValueError:
-            print("Error: debe ingresar un numero.")
+            numero = 0
+        if numero > 0:
+            return numero
+        print("Error: ingrese un numero mayor que cero.")
 
 
-def elegirOpcion(titulo, opciones):
-    """Muestra las opciones de una tupla numeradas y retorna la elegida."""
+def elegir(titulo, opciones):
     print(titulo)
     for i in range(len(opciones)):
         print(f"  {i + 1}. {opciones[i]}")
-    opcion = input("Elija una opcion: ").strip()
-    while not (opcion.isdigit() and 1 <= int(opcion) <= len(opciones)):
-        print(f"Error: elija un numero entre 1 y {len(opciones)}.")
-        opcion = input("Elija una opcion: ").strip()
-    return opciones[int(opcion) - 1]
+    numero = leerEntero("Opcion: ")
+    while numero > len(opciones):
+        print("Error: opcion no valida.")
+        numero = leerEntero("Opcion: ")
+    return opciones[numero - 1]
 
 
 def leerCodigoNuevo(diccionario, mensaje):
-    """Pide un codigo que NO exista todavia (para registrar)."""
     codigo = leerTexto(mensaje).upper()
     while codigo in diccionario:
-        print(f"Error: el codigo {codigo} ya existe.")
+        print("Error: ese codigo ya existe.")
         codigo = leerTexto(mensaje).upper()
     return codigo
 
 
 def leerCodigoExistente(diccionario, mensaje):
-    """Pide un codigo que SI exista (para usarlo en donaciones y entregas)."""
     codigo = leerTexto(mensaje).upper()
     while codigo not in diccionario:
-        print(f"Error: el codigo {codigo} no existe.")
+        print("Error: ese codigo no existe.")
         codigo = leerTexto(mensaje).upper()
     return codigo
 
 
-def leerCodigoEditado(diccionario, codigoActual):
-    """Al editar: pide el nuevo codigo. Enter o un codigo repetido mantienen el actual."""
-    nuevo = input(f"Codigo [{codigoActual}]: ").strip().upper()
-    if nuevo == "" or nuevo == codigoActual:
-        return codigoActual
-    if nuevo in diccionario:
-        print(f"Error: el codigo {nuevo} ya existe. Se mantiene {codigoActual}.")
-        return codigoActual
-    return nuevo
-
-
-def mantener(campo, valorActual):
-    """Al editar: si se presiona Enter se mantiene el valor actual."""
-    texto = input(f"{campo} [{valorActual}]: ").strip()
+def mantener(campo, actual):
+    texto = input(f"{campo} [{actual}]: ").strip()
     if texto == "":
-        return valorActual
+        return actual
     return texto
 
 
-def confirmar(mensaje):
-    """Retorna True si el usuario responde 's'."""
-    respuesta = input(f"{mensaje} (s/n): ").strip().lower()
-    return respuesta == "s"
-
-
-# ------------------------------------------------------------
-# FUNCIONES DE FECHAS (formato AAAA-MM-DD)
-# ------------------------------------------------------------
-def esBisiesto(anio):
-    return (anio % 4 == 0 and anio % 100 != 0) or anio % 400 == 0
-
-
-def diasDelMes(anio, mes):
-    diasPorMes = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-    if mes == 2 and esBisiesto(anio):
-        return 29
-    return diasPorMes[mes - 1]
-
-
+# ---------------- FECHAS (AAAA-MM-DD) ----------------
 def fechaValida(fecha):
-    """Revisa que la fecha tenga el formato AAAA-MM-DD y que exista."""
     partes = fecha.split("-")
-    if len(partes) != 3:
+    if len(partes) != 3 or not (partes[0].isdigit() and partes[1].isdigit() and partes[2].isdigit()):
         return False
-    if not (partes[0].isdigit() and partes[1].isdigit() and partes[2].isdigit()):
-        return False
-    anio = int(partes[0])
-    mes = int(partes[1])
-    dia = int(partes[2])
-    if anio < 2000 or mes < 1 or mes > 12:
-        return False
-    return 1 <= dia <= diasDelMes(anio, mes)
+    mes, dia = int(partes[1]), int(partes[2])
+    diasMes = (31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+    return 1 <= mes <= 12 and 1 <= dia <= diasMes[mes - 1]
 
 
 def leerFecha(mensaje):
     fecha = input(mensaje).strip()
     while not fechaValida(fecha):
-        print("Error: fecha invalida. Use el formato AAAA-MM-DD (ejemplo 2026-09-29).")
+        print("Error: use el formato AAAA-MM-DD (ejemplo 2026-09-29).")
         fecha = input(mensaje).strip()
     return fecha
 
 
-def fechaADias(fecha):
-    """Convierte una fecha en la cantidad de dias contados desde el anio 2000.
-    Asi se pueden restar dos fechas para saber cuantos dias hay entre ellas."""
+def aDias(fecha):
+    """Convierte una fecha en numero de dias para poder restar fechas."""
     partes = fecha.split("-")
-    anio = int(partes[0])
-    mes = int(partes[1])
-    dia = int(partes[2])
-
-    total = dia
-    for a in range(2000, anio):       # sumar los dias de los anios completos
-        if esBisiesto(a):
-            total += 366
-        else:
-            total += 365
-    for m in range(1, mes):           # sumar los dias de los meses completos
-        total += diasDelMes(anio, m)
-    return total
+    anio, mes, dia = int(partes[0]), int(partes[1]), int(partes[2])
+    diasAntes = (0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
+    if mes <= 2:
+        anio -= 1  # el 29 de febrero se cuenta desde marzo
+    return int(partes[0]) * 365 + anio // 4 - anio // 100 + anio // 400 + diasAntes[mes - 1] + dia
 
 
 def fechaHoy():
-    """Pide la fecha de hoy solo la primera vez que se necesita."""
     if sistema["hoy"] == "":
         sistema["hoy"] = leerFecha("Ingrese la fecha de hoy (AAAA-MM-DD): ")
     return sistema["hoy"]
 
 
-def diasParaVencer(codLote):
-    """Dias que faltan para que venza el lote (negativo si ya vencio)."""
-    return fechaADias(lotes[codLote]["vencimiento"]) - fechaADias(fechaHoy())
+def diasParaVencer(lote):
+    return aDias(lotes[lote]["vence"]) - aDias(fechaHoy())
 
 
-def estadoLote(codLote):
-    dias = diasParaVencer(codLote)
+def estado(lote):
+    dias = diasParaVencer(lote)
     if dias < 0:
         return "Vencido"
     elif dias <= DIAS_ALERTA:
         return "Proximo a vencer"
-    else:
-        return "Disponible"
+    return "Disponible"
 
 
-# ============================================================
-# 1. REGISTRAR / GESTIONAR DONANTES
-# ============================================================
+# ---------------- 1. DONANTES ----------------
 def registrarDonante():
-    print("\n--- REGISTRAR DONANTE ---")
-    codigo = leerCodigoNuevo(donantes, "Codigo del donante: ")
+    codigo = leerCodigoNuevo(donantes, "Codigo: ")
     nombre = leerTexto("Nombre o razon social: ").title()
-    tipo = elegirOpcion("Tipo de donante:", TIPOS_DONANTE)
-    contacto = leerTexto("Contacto (telefono o correo): ")
-
+    tipo = elegir("Tipo de donante:", TIPOS_DONANTE)
+    contacto = leerTexto("Contacto: ")
     donantes[codigo] = {"nombre": nombre, "tipo": tipo, "contacto": contacto}
-    print(f"Donante {codigo} registrado correctamente.")
+    print("Donante registrado.")
 
 
 def listarDonantes():
-    print("\n--- LISTA DE DONANTES ---")
-    print(f"{'Codigo':8} {'Nombre':25} {'Tipo':10} {'Contacto':20}")
-    for codigo, datos in donantes.items():
-        print(f"{codigo:8} {datos['nombre']:25} {datos['tipo']:10} {datos['contacto']:20}")
-    print(f"Total de donantes: {len(donantes)}")
+    print(f"{'Codigo':8}{'Nombre':25}{'Tipo':10}Contacto")
+    for codigo, d in donantes.items():
+        print(f"{codigo:8}{d['nombre']:25}{d['tipo']:10}{d['contacto']}")
 
 
 def editarDonante():
-    print("\n--- EDITAR DONANTE ---")
-    codigo = input("Codigo del donante a editar: ").strip().upper()
-    if codigo not in donantes:
-        print("No existe ese donante.")
+    if len(donantes) == 0:
+        print("No hay donantes registrados.")
         return
-
-    datos = donantes[codigo]
+    codigo = leerCodigoExistente(donantes, "Codigo del donante a editar: ")
+    d = donantes[codigo]
     print("Presione Enter para mantener el valor actual.")
-    datos["nombre"] = mantener("Nombre", datos["nombre"]).title()
-    if confirmar(f"Tipo actual: {datos['tipo']}. Desea cambiarlo?"):
-        datos["tipo"] = elegirOpcion("Nuevo tipo:", TIPOS_DONANTE)
-    datos["contacto"] = mantener("Contacto", datos["contacto"])
-
-    nuevoCodigo = leerCodigoEditado(donantes, codigo)
-    if nuevoCodigo != codigo:
-        donantes[nuevoCodigo] = donantes.pop(codigo)   # cambiar la llave del diccionario
-        for donacion in donaciones:                    # actualizar el codigo en el historial
+    d["nombre"] = mantener("Nombre", d["nombre"]).title()
+    d["contacto"] = mantener("Contacto", d["contacto"])
+    if input(f"Cambiar tipo ({d['tipo']})? (s/n): ").lower() == "s":
+        d["tipo"] = elegir("Nuevo tipo:", TIPOS_DONANTE)
+    nuevo = input(f"Nuevo codigo [{codigo}]: ").strip().upper()
+    if nuevo in donantes and nuevo != codigo:
+        print("Error: ese codigo ya existe, se mantiene el anterior.")
+    elif nuevo != "":
+        donantes[nuevo] = donantes.pop(codigo)
+        for donacion in donaciones:
             if donacion["donante"] == codigo:
-                donacion["donante"] = nuevoCodigo
-        for datosLote in lotes.values():               # y en los lotes
-            if datosLote["donante"] == codigo:
-                datosLote["donante"] = nuevoCodigo
-    print(f"Donante {nuevoCodigo} actualizado correctamente.")
+                donacion["donante"] = nuevo
+    print("Donante actualizado.")
 
 
-# ============================================================
-# 2. REGISTRAR / GESTIONAR BENEFICIARIOS
-# ============================================================
+# ---------------- 2. BENEFICIARIOS ----------------
 def registrarBeneficiario():
-    print("\n--- REGISTRAR ORGANIZACION BENEFICIARIA ---")
-    codigo = leerCodigoNuevo(beneficiarios, "Codigo de la organizacion: ")
-    nombre = leerTexto("Nombre de la organizacion: ").title()
-    tipo = elegirOpcion("Tipo de organizacion:", TIPOS_ORGANIZACION)
-    personas = leerEntero("Cantidad estimada de personas atendidas: ")
-
+    codigo = leerCodigoNuevo(beneficiarios, "Codigo: ")
+    nombre = leerTexto("Nombre: ").title()
+    tipo = elegir("Tipo de organizacion:", TIPOS_ORGANIZACION)
+    personas = leerEntero("Personas atendidas: ")
     beneficiarios[codigo] = {"nombre": nombre, "tipo": tipo, "personas": personas}
-    print(f"Organizacion {codigo} registrada correctamente.")
+    print("Beneficiario registrado.")
 
 
 def listarBeneficiarios():
-    print("\n--- LISTA DE ORGANIZACIONES BENEFICIARIAS ---")
-    print(f"{'Codigo':8} {'Nombre':25} {'Tipo':16} {'Personas':>8}")
-    for codigo, datos in beneficiarios.items():
-        print(f"{codigo:8} {datos['nombre']:25} {datos['tipo']:16} {datos['personas']:8,d}")
-    print(f"Total de organizaciones: {len(beneficiarios)}")
+    print(f"{'Codigo':8}{'Nombre':25}{'Tipo':18}Personas")
+    for codigo, b in beneficiarios.items():
+        print(f"{codigo:8}{b['nombre']:25}{b['tipo']:18}{b['personas']}")
 
 
 def editarBeneficiario():
-    print("\n--- EDITAR ORGANIZACION BENEFICIARIA ---")
-    codigo = input("Codigo de la organizacion a editar: ").strip().upper()
-    if codigo not in beneficiarios:
-        print("No existe esa organizacion.")
+    if len(beneficiarios) == 0:
+        print("No hay beneficiarios registrados.")
         return
-
-    datos = beneficiarios[codigo]
+    codigo = leerCodigoExistente(beneficiarios, "Codigo del beneficiario a editar: ")
+    b = beneficiarios[codigo]
     print("Presione Enter para mantener el valor actual.")
-    datos["nombre"] = mantener("Nombre", datos["nombre"]).title()
-    if confirmar(f"Tipo actual: {datos['tipo']}. Desea cambiarlo?"):
-        datos["tipo"] = elegirOpcion("Nuevo tipo:", TIPOS_ORGANIZACION)
-    if confirmar(f"Personas atendidas: {datos['personas']}. Desea cambiarlo?"):
-        datos["personas"] = leerEntero("Nueva cantidad de personas: ")
-
-    nuevoCodigo = leerCodigoEditado(beneficiarios, codigo)
-    if nuevoCodigo != codigo:
-        beneficiarios[nuevoCodigo] = beneficiarios.pop(codigo)  # cambiar la llave
-        for entrega in entregas:                                # actualizar el historial
+    b["nombre"] = mantener("Nombre", b["nombre"]).title()
+    if input(f"Cambiar tipo ({b['tipo']})? (s/n): ").lower() == "s":
+        b["tipo"] = elegir("Nuevo tipo:", TIPOS_ORGANIZACION)
+    if input(f"Cambiar personas ({b['personas']})? (s/n): ").lower() == "s":
+        b["personas"] = leerEntero("Personas atendidas: ")
+    nuevo = input(f"Nuevo codigo [{codigo}]: ").strip().upper()
+    if nuevo in beneficiarios and nuevo != codigo:
+        print("Error: ese codigo ya existe, se mantiene el anterior.")
+    elif nuevo != "":
+        beneficiarios[nuevo] = beneficiarios.pop(codigo)
+        for entrega in entregas:
             if entrega["beneficiario"] == codigo:
-                entrega["beneficiario"] = nuevoCodigo
-    print(f"Organizacion {nuevoCodigo} actualizada correctamente.")
+                entrega["beneficiario"] = nuevo
+    print("Beneficiario actualizado.")
 
 
-# ============================================================
-# 3. REGISTRAR PRODUCTOS
-# ============================================================
+# ---------------- 3. PRODUCTOS ----------------
 def registrarProducto():
-    print("\n--- REGISTRAR PRODUCTO ---")
-    codigo = leerCodigoNuevo(productos, "Codigo del producto: ")
-    nombre = leerTexto("Nombre del producto: ").title()
-    categoria = elegirOpcion("Categoria:", CATEGORIAS)
-    unidad = elegirOpcion("Unidad de medida:", UNIDADES)
-
+    codigo = leerCodigoNuevo(productos, "Codigo: ")
+    nombre = leerTexto("Nombre: ").title()
+    categoria = elegir("Categoria:", CATEGORIAS)
+    unidad = elegir("Unidad de medida:", UNIDADES)
     productos[codigo] = {"nombre": nombre, "categoria": categoria, "unidad": unidad}
-    print(f"Producto {codigo} registrado correctamente.")
+    print("Producto registrado.")
 
 
 def listarProductos():
-    print("\n--- LISTA DE PRODUCTOS ---")
-    print(f"{'Codigo':8} {'Nombre':20} {'Categoria':16} {'Unidad':10}")
-    for codigo, datos in productos.items():
-        print(f"{codigo:8} {datos['nombre']:20} {datos['categoria']:16} {datos['unidad']:10}")
-    print(f"Total de productos: {len(productos)}")
+    print(f"{'Codigo':8}{'Nombre':20}{'Categoria':16}Unidad")
+    for codigo, p in productos.items():
+        print(f"{codigo:8}{p['nombre']:20}{p['categoria']:16}{p['unidad']}")
 
 
-# ============================================================
-# 4. REGISTRAR DONACION Y LOTE
-# ============================================================
+# ---------------- 4. DONACION Y LOTE ----------------
 def registrarDonacion():
-    print("\n--- REGISTRAR DONACION Y LOTE ---")
     if len(donantes) == 0 or len(productos) == 0:
-        print("Primero registre al menos un donante y un producto.")
+        print("Primero registre un donante y un producto.")
         return
+    donante = leerCodigoExistente(donantes, "Codigo del donante: ")
+    fecha = leerFecha("Fecha de donacion (AAAA-MM-DD): ")
+    producto = leerCodigoExistente(productos, "Codigo del producto: ")
+    cantidad = leerCantidad(f"Cantidad recibida ({productos[producto]['unidad']}): ")
+    vence = leerFecha("Fecha de vencimiento (AAAA-MM-DD): ")
+    while aDias(vence) < aDias(fecha):
+        print("Error: el vencimiento no puede ser antes de la donacion.")
+        vence = leerFecha("Fecha de vencimiento (AAAA-MM-DD): ")
 
-    codDonante = leerCodigoExistente(donantes, "Codigo del donante: ")
-    fecha = leerFecha("Fecha de la donacion (AAAA-MM-DD): ")
-    codProducto = leerCodigoExistente(productos, "Codigo del producto: ")
-    unidad = productos[codProducto]["unidad"]
-    cantidad = leerDecimal(f"Cantidad recibida ({unidad}): ")
-    vencimiento = leerFecha("Fecha de vencimiento del lote (AAAA-MM-DD): ")
-    while fechaADias(vencimiento) < fechaADias(fecha):
-        print("Error: el vencimiento no puede ser anterior a la fecha de donacion.")
-        vencimiento = leerFecha("Fecha de vencimiento del lote (AAAA-MM-DD): ")
-
-    # Codigo unico del lote: L1, L2, L3... (los lotes nunca se eliminan)
-    codLote = f"L{len(lotes) + 1}"
-
-    lotes[codLote] = {
-        "producto": codProducto,
-        "donante": codDonante,
-        "recibido": cantidad,
-        "disponible": cantidad,
-        "perdido": 0.0,
-        "vencimiento": vencimiento,
-    }
-    donaciones.append({"donante": codDonante, "fecha": fecha, "producto": codProducto,
-                       "lote": codLote, "cantidad": cantidad})
+    lote = f"L{len(lotes) + 1}"  # codigo unico de lote: L1, L2, L3...
+    lotes[lote] = {"producto": producto, "disponible": cantidad, "perdido": 0, "vence": vence}
+    donaciones.append({"donante": donante, "fecha": fecha, "producto": producto,
+                       "lote": lote, "cantidad": cantidad})
     acumulados["recibido"] += cantidad
-    print(f"Lote {codLote} creado con {cantidad:.2f} {unidad}. Estado: {estadoLote(codLote)}")
+    print(f"Lote {lote} registrado. Estado: {estado(lote)}")
 
 
-# ============================================================
-# 5. REGISTRAR ENTREGA
-# ============================================================
+# ---------------- 5. ENTREGAS ----------------
 def registrarEntrega():
-    print("\n--- REGISTRAR ENTREGA ---")
     if len(beneficiarios) == 0 or len(lotes) == 0:
-        print("Primero registre al menos un beneficiario y una donacion.")
+        print("Primero registre un beneficiario y una donacion.")
         return
+    beneficiario = leerCodigoExistente(beneficiarios, "Codigo del beneficiario: ")
+    fecha = leerFecha("Fecha de entrega (AAAA-MM-DD): ")
+    producto = leerCodigoExistente(productos, "Codigo del producto: ")
 
-    codBenef = leerCodigoExistente(beneficiarios, "Codigo del beneficiario: ")
-    fecha = leerFecha("Fecha de la entrega (AAAA-MM-DD): ")
-    codProducto = leerCodigoExistente(productos, "Codigo del producto: ")
-    unidad = productos[codProducto]["unidad"]
-
-    # Buscar los lotes de ese producto que tienen stock y no estan vencidos
-    lotesValidos = []
-    print("Lotes disponibles:")
-    for codLote, datos in lotes.items():
-        esDelProducto = datos["producto"] == codProducto
-        tieneStock = datos["disponible"] > 0
-        noVencido = fechaADias(datos["vencimiento"]) >= fechaADias(fecha)
-        if esDelProducto and tieneStock and noVencido:
-            lotesValidos.append(codLote)
-            print(f"  {codLote}: {datos['disponible']:.2f} {unidad}, vence {datos['vencimiento']}")
-
-    if len(lotesValidos) == 0:
+    validos = []  # lotes del producto, con stock y sin vencer
+    for lote, d in lotes.items():
+        if d["producto"] == producto and d["disponible"] > 0 and aDias(d["vence"]) >= aDias(fecha):
+            validos.append(lote)
+            print(f"  {lote}: {d['disponible']:.2f} disponibles, vence {d['vence']}")
+    if len(validos) == 0:
         print("No hay lotes con stock y sin vencer de ese producto.")
         return
 
-    codLote = leerTexto("Codigo del lote: ").upper()
-    while codLote not in lotesValidos:
-        print("Error: lote invalido, sin stock o vencido.")
-        codLote = leerTexto("Codigo del lote: ").upper()
+    lote = leerTexto("Codigo del lote: ").upper()
+    while lote not in validos:
+        print("Error: lote no valido, sin stock o vencido.")
+        lote = leerTexto("Codigo del lote: ").upper()
+    cantidad = leerCantidad("Cantidad a entregar: ")
+    while cantidad > lotes[lote]["disponible"]:
+        print(f"Error: solo hay {lotes[lote]['disponible']:.2f} disponibles.")
+        cantidad = leerCantidad("Cantidad a entregar: ")
 
-    disponible = lotes[codLote]["disponible"]
-    cantidad = leerDecimal(f"Cantidad a entregar ({unidad}): ")
-    while cantidad > disponible:
-        print(f"Error: solo hay {disponible:.2f} {unidad} en el lote {codLote}.")
-        cantidad = leerDecimal(f"Cantidad a entregar ({unidad}): ")
-
-    lotes[codLote]["disponible"] -= cantidad   # descontar del stock automaticamente
-    entregas.append({"beneficiario": codBenef, "fecha": fecha, "producto": codProducto,
-                     "lote": codLote, "cantidad": cantidad})
+    lotes[lote]["disponible"] -= cantidad  # se descuenta del stock
+    entregas.append({"beneficiario": beneficiario, "fecha": fecha, "producto": producto,
+                     "lote": lote, "cantidad": cantidad})
     acumulados["entregado"] += cantidad
-    print(f"Entrega registrada. Quedan {lotes[codLote]['disponible']:.2f} {unidad} en el lote {codLote}.")
+    print("Entrega registrada.")
 
 
 def detalleEntregas():
-    print("\n--- DETALLE DE ENTREGAS POR BENEFICIARIO ---")
-    codBenef = input("Codigo del beneficiario: ").strip().upper()
-    if codBenef not in beneficiarios:
-        print("No existe ese beneficiario.")
+    if len(beneficiarios) == 0:
+        print("No hay beneficiarios registrados.")
         return
-
-    print(f"Entregas a {beneficiarios[codBenef]['nombre']}:")
-    total = 0
-    for entrega in entregas:
-        if entrega["beneficiario"] == codBenef:
-            producto = productos[entrega["producto"]]
-            print(f"  {entrega['fecha']:12} {entrega['lote']:6} {producto['nombre']:20} "
-                  f"{entrega['cantidad']:10.2f} {producto['unidad']}")
-            total += entrega["cantidad"]
-    print(f"Total entregado: {total:,.2f}")
+    codigo = leerCodigoExistente(beneficiarios, "Codigo del beneficiario: ")
+    for e in entregas:
+        if e["beneficiario"] == codigo:
+            print(f"{e['fecha']:12}{e['lote']:6}{productos[e['producto']]['nombre']:20}{e['cantidad']:10.2f}")
 
 
-# ============================================================
-# 6. CONSULTAR STOCK Y VENCIMIENTOS
-# ============================================================
-def imprimirEncabezadoLotes():
-    print(f"{'Lote':6} {'Producto':18} {'Disponible':>10} {'Unidad':8} {'Vence':>11} {'Dias':>5}  Estado")
-
-
-def imprimirLote(codLote):
-    datos = lotes[codLote]
-    producto = productos[datos["producto"]]
-    print(f"{codLote:6} {producto['nombre']:18} {datos['disponible']:10.2f} {producto['unidad']:8} "
-          f"{datos['vencimiento']:>11} {diasParaVencer(codLote):5d}  {estadoLote(codLote)}")
-
-
-def lotesConEstado(estado):
-    """Retorna una lista con los lotes que tienen stock y el estado indicado.
-    La lista se ordena por dias para vencer (los mas urgentes primero)."""
-    resultado = []
-    for codLote, datos in lotes.items():
-        if estadoLote(codLote) == estado and datos["disponible"] > 0:
-            resultado.append(codLote)
-    resultado.sort(key=diasParaVencer)
-    return resultado
-
-
+# ---------------- 6. STOCK Y VENCIMIENTOS ----------------
 def reporteStock():
-    print(f"\n--- STOCK DISPONIBLE POR CATEGORIA Y PRODUCTO (al {fechaHoy()}) ---")
-
-    # Sumar el stock de cada producto (sin contar lotes vencidos)
-    stock = {}
-    for codLote, datos in lotes.items():
-        if estadoLote(codLote) != "Vencido":
-            codProducto = datos["producto"]
-            stock[codProducto] = stock.get(codProducto, 0) + datos["disponible"]
-
-    # Mostrar agrupado por categoria
-    print(f"{'Categoria':16} {'Producto':20} {'Cantidad':>10} Unidad")
+    print(f"{'Categoria':16}{'Producto':20}{'Stock':>10}  Unidad")
     for categoria in CATEGORIAS:
-        for codProducto, cantidad in stock.items():
-            producto = productos[codProducto]
-            if producto["categoria"] == categoria and cantidad > 0:
-                print(f"{categoria:16} {producto['nombre']:20} {cantidad:10.2f} {producto['unidad']}")
+        for codigo, p in productos.items():
+            if p["categoria"] == categoria:
+                stock = 0
+                for lote, d in lotes.items():
+                    if d["producto"] == codigo and estado(lote) != "Vencido":
+                        stock += d["disponible"]
+                print(f"{categoria:16}{p['nombre']:20}{stock:10.2f}  {p['unidad']}")
+
+
+def imprimirLote(lote):
+    d = lotes[lote]
+    print(f"{lote:6}{productos[d['producto']]['nombre']:20}{d['disponible']:10.2f}  "
+          f"{d['vence']:12}{estado(lote)}")
 
 
 def listarLotes():
-    print(f"\n--- LOTES Y SU ESTADO (al {fechaHoy()}) ---")
-    imprimirEncabezadoLotes()
-    for codLote in lotes:
-        imprimirLote(codLote)
+    print(f"{'Lote':6}{'Producto':20}{'Disponible':>10}  {'Vence':12}Estado")
+    for lote in lotes:
+        imprimirLote(lote)
 
 
-def listarProximosAVencer():
-    print(f"\n--- LOTES PROXIMOS A VENCER ({DIAS_ALERTA} dias o menos) ---")
-    imprimirEncabezadoLotes()
+def lotesProximos():
+    print(f"{'Lote':6}{'Producto':20}{'Disponible':>10}  {'Vence':12}Estado")
     comprometido = 0
-    for codLote in lotesConEstado("Proximo a vencer"):
-        imprimirLote(codLote)
-        comprometido += lotes[codLote]["disponible"]
-    print(f"Cantidad comprometida (en riesgo de perderse): {comprometido:,.2f}")
+    for lote, d in lotes.items():
+        if estado(lote) == "Proximo a vencer" and d["disponible"] > 0:
+            imprimirLote(lote)
+            comprometido += d["disponible"]
+    print(f"Cantidad comprometida: {comprometido:.2f}")
 
 
 def registrarPerdidas():
-    print("\n--- REGISTRAR PERDIDAS POR VENCIMIENTO ---")
-    vencidos = lotesConEstado("Vencido")
-    if len(vencidos) == 0:
-        print("No hay lotes vencidos con cantidad remanente.")
-        return
-
-    imprimirEncabezadoLotes()
-    for codLote in vencidos:
-        imprimirLote(codLote)
-
-    if confirmar("Registrar estas cantidades como perdida?"):
-        for codLote in vencidos:
-            remanente = lotes[codLote]["disponible"]
-            lotes[codLote]["perdido"] += remanente
-            lotes[codLote]["disponible"] = 0
-            acumulados["perdido"] += remanente
-        print(f"Se registraron {len(vencidos)} lote(s) como perdida.")
+    total = 0
+    for lote, d in lotes.items():
+        if estado(lote) == "Vencido" and d["disponible"] > 0:
+            print(f"Lote {lote}: se pierden {d['disponible']:.2f}")
+            total += d["disponible"]
+            d["perdido"] += d["disponible"]
+            d["disponible"] = 0
+    acumulados["perdido"] += total
+    print(f"Total registrado como perdida: {total:.2f}")
 
 
-def cambiarFechaActual():
-    sistema["hoy"] = leerFecha(f"Nueva fecha actual [{sistema['hoy']}] (AAAA-MM-DD): ")
-    print("Fecha actualizada.")
-
-
-# ============================================================
-# 7. GENERAR REPORTES
-# ============================================================
+# ---------------- 7. REPORTES ----------------
 def ordenaPorCantidad(llaveValor):
-    """Se usa en sorted(): ordena los pares (llave, valor) por el valor."""
     return llaveValor[1]
 
 
-def sumarCantidades(registros, campo):
-    """Suma las cantidades de una lista (donaciones o entregas) agrupando por un campo.
-    Ejemplo: sumarCantidades(donaciones, "donante") -> {"D1": 120.0, "D2": 50.0}"""
+def sumarPor(lista, campo):
+    """Suma las cantidades de la lista agrupando por campo, de mayor a menor."""
     totales = {}
-    for registro in registros:
-        llave = registro[campo]
-        totales[llave] = totales.get(llave, 0) + registro["cantidad"]
-    return totales
+    for registro in lista:
+        totales[registro[campo]] = totales.get(registro[campo], 0) + registro["cantidad"]
+    return dict(sorted(totales.items(), key=ordenaPorCantidad, reverse=True))
 
 
 def rankingDonantes():
-    print("\n--- RANKING DE DONANTES POR CANTIDAD DONADA ---")
-    totales = sumarCantidades(donaciones, "donante")
-    ranking = dict(sorted(totales.items(), key=ordenaPorCantidad, reverse=True))
     puesto = 1
-    for codigo, total in ranking.items():
-        print(f"{puesto:3d}. {codigo:8} {donantes[codigo]['nombre']:25} {total:12,.2f}")
+    for codigo, total in sumarPor(donaciones, "donante").items():
+        print(f"{puesto}. {donantes[codigo]['nombre']:25}{total:10.2f}")
         puesto += 1
 
 
 def totalPorBeneficiario():
-    print("\n--- CANTIDAD TOTAL ENTREGADA POR ORGANIZACION ---")
-    totales = sumarCantidades(entregas, "beneficiario")
-    ordenado = dict(sorted(totales.items(), key=ordenaPorCantidad, reverse=True))
-    for codigo, total in ordenado.items():
-        datos = beneficiarios[codigo]
-        print(f"{codigo:8} {datos['nombre']:25} {datos['personas']:6,d} personas {total:12,.2f}")
+    for codigo, total in sumarPor(entregas, "beneficiario").items():
+        print(f"{beneficiarios[codigo]['nombre']:25}{total:10.2f}")
 
 
-def indicadoresGenerales():
-    print("\n--- ACUMULADOS, APROVECHAMIENTO Y DESPERDICIO ---")
+def aprovechamientoYPerdidas():
     recibido = acumulados["recibido"]
-    entregado = acumulados["entregado"]
-    perdido = acumulados["perdido"]
-    enAlmacen = recibido - entregado - perdido
-
-    print(f"{'Total recibido':30} {recibido:12,.2f}")
-    print(f"{'Total entregado':30} {entregado:12,.2f}")
-    print(f"{'Total perdido por vencimiento':30} {perdido:12,.2f}")
-    print(f"{'Total aun en almacen':30} {enAlmacen:12,.2f}")
-    if recibido > 0:
-        print(f"{'Porcentaje de aprovechamiento':30} {entregado / recibido * 100:11.2f}%")
-        print(f"{'Porcentaje de desperdicio':30} {perdido / recibido * 100:11.2f}%")
-
-
-def donacionesPorTipoDonante():  # reporte adicional 1
-    print("\n--- DONACIONES POR TIPO DE DONANTE ---")
-    if acumulados["recibido"] == 0:
+    if recibido == 0:
         print("No hay donaciones registradas.")
         return
+    print(f"Recibido:  {recibido:10.2f}")
+    print(f"Entregado: {acumulados['entregado']:10.2f}  ({acumulados['entregado'] / recibido * 100:.2f}% aprovechado)")
+    print(f"Perdido:   {acumulados['perdido']:10.2f}  ({acumulados['perdido'] / recibido * 100:.2f}% desperdiciado)")
 
+
+def donacionesPorTipo():  # reporte adicional 1
     totales = {}
-    for donacion in donaciones:
-        tipo = donantes[donacion["donante"]]["tipo"]
-        totales[tipo] = totales.get(tipo, 0) + donacion["cantidad"]
-
-    for tipo in TIPOS_DONANTE:
-        cantidad = totales.get(tipo, 0)
-        porcentaje = cantidad / acumulados["recibido"] * 100
-        print(f"{tipo:10} {cantidad:12,.2f} {porcentaje:9.2f}%")
+    for d in donaciones:
+        tipo = donantes[d["donante"]]["tipo"]
+        totales[tipo] = totales.get(tipo, 0) + d["cantidad"]
+    for tipo, total in totales.items():
+        print(f"{tipo:10}{total:10.2f}")
 
 
 def resumenPorProducto():  # reporte adicional 2
-    print("\n--- RECIBIDO, ENTREGADO Y PERDIDO POR PRODUCTO ---")
-    entregadoPorProducto = sumarCantidades(entregas, "producto")
-    print(f"{'Producto':18} {'Unidad':8} {'Recibido':>10} {'Entregado':>10} {'Perdido':>9} {'Aprovech.':>10}")
-
-    for codProducto, producto in productos.items():
-        recibido = 0
+    entregado = sumarPor(entregas, "producto")
+    print(f"{'Producto':20}{'Recibido':>10}{'Entregado':>10}{'Perdido':>10}")
+    for codigo, recibido in sumarPor(donaciones, "producto").items():
         perdido = 0
-        for datosLote in lotes.values():
-            if datosLote["producto"] == codProducto:
-                recibido += datosLote["recibido"]
-                perdido += datosLote["perdido"]
-        if recibido > 0:
-            entregado = entregadoPorProducto.get(codProducto, 0)
-            aprovechamiento = entregado / recibido * 100
-            print(f"{producto['nombre']:18} {producto['unidad']:8} {recibido:10.2f} "
-                  f"{entregado:10.2f} {perdido:9.2f} {aprovechamiento:9.2f}%")
+        for d in lotes.values():
+            if d["producto"] == codigo:
+                perdido += d["perdido"]
+        print(f"{productos[codigo]['nombre']:20}{recibido:10.2f}{entregado.get(codigo, 0):10.2f}{perdido:10.2f}")
 
 
-# ============================================================
-# MENUS
-# ============================================================
+# ---------------- MENUS ----------------
 def menuDonantes():
     while True:
-        print("\n===== DONANTES =====")
-        print("1. Registrar donante")
-        print("2. Listar donantes")
-        print("3. Editar donante")
-        print("4. Volver")
-        opcion = input("Seleccione una opcion: ").strip()
+        opcion = input("\n--- DONANTES ---\n1. Registrar\n2. Listar\n3. Editar\n4. Volver\nOpcion: ")
         if opcion == "1":
             registrarDonante()
         elif opcion == "2":
@@ -612,18 +400,11 @@ def menuDonantes():
             editarDonante()
         elif opcion == "4":
             break
-        else:
-            print("Opcion no valida.")
 
 
 def menuBeneficiarios():
     while True:
-        print("\n===== BENEFICIARIOS =====")
-        print("1. Registrar organizacion")
-        print("2. Listar organizaciones")
-        print("3. Editar organizacion")
-        print("4. Volver")
-        opcion = input("Seleccione una opcion: ").strip()
+        opcion = input("\n--- BENEFICIARIOS ---\n1. Registrar\n2. Listar\n3. Editar\n4. Volver\nOpcion: ")
         if opcion == "1":
             registrarBeneficiario()
         elif opcion == "2":
@@ -632,115 +413,76 @@ def menuBeneficiarios():
             editarBeneficiario()
         elif opcion == "4":
             break
-        else:
-            print("Opcion no valida.")
 
 
 def menuProductos():
     while True:
-        print("\n===== PRODUCTOS =====")
-        print("1. Registrar producto")
-        print("2. Listar productos")
-        print("3. Volver")
-        opcion = input("Seleccione una opcion: ").strip()
+        opcion = input("\n--- PRODUCTOS ---\n1. Registrar\n2. Listar\n3. Volver\nOpcion: ")
         if opcion == "1":
             registrarProducto()
         elif opcion == "2":
             listarProductos()
         elif opcion == "3":
             break
-        else:
-            print("Opcion no valida.")
 
 
 def menuEntregas():
     while True:
-        print("\n===== ENTREGAS =====")
-        print("1. Registrar entrega")
-        print("2. Detalle de entregas por beneficiario")
-        print("3. Volver")
-        opcion = input("Seleccione una opcion: ").strip()
+        opcion = input("\n--- ENTREGAS ---\n1. Registrar entrega\n2. Detalle por beneficiario\n3. Volver\nOpcion: ")
         if opcion == "1":
             registrarEntrega()
         elif opcion == "2":
             detalleEntregas()
         elif opcion == "3":
             break
-        else:
-            print("Opcion no valida.")
 
 
 def menuStock():
     while True:
-        print("\n===== STOCK Y VENCIMIENTOS =====")
-        print("1. Stock disponible por categoria y producto")
-        print("2. Ver todos los lotes y su estado")
-        print("3. Lotes proximos a vencer")
-        print("4. Registrar perdidas por vencimiento")
-        print("5. Cambiar fecha actual")
-        print("6. Volver")
-        opcion = input("Seleccione una opcion: ").strip()
+        opcion = input("\n--- STOCK Y VENCIMIENTOS ---\n1. Stock por categoria y producto\n2. Lotes y su estado\n"
+                       "3. Lotes proximos a vencer\n4. Registrar perdidas por vencimiento\n5. Volver\nOpcion: ")
         if opcion == "1":
             reporteStock()
         elif opcion == "2":
             listarLotes()
         elif opcion == "3":
-            listarProximosAVencer()
+            lotesProximos()
         elif opcion == "4":
             registrarPerdidas()
         elif opcion == "5":
-            cambiarFechaActual()
-        elif opcion == "6":
             break
-        else:
-            print("Opcion no valida.")
 
 
 def menuReportes():
     while True:
-        print("\n===== REPORTES =====")
-        print("1. Stock disponible por categoria y producto")
-        print("2. Lotes proximos a vencer y cantidad comprometida")
-        print("3. Ranking de donantes")
-        print("4. Cantidad total entregada por organizacion")
-        print("5. Acumulados, % de aprovechamiento y % de desperdicio")
-        print("6. Donaciones por tipo de donante (adicional)")
-        print("7. Recibido / entregado / perdido por producto (adicional)")
-        print("8. Volver")
-        opcion = input("Seleccione una opcion: ").strip()
+        opcion = input("\n--- REPORTES ---\n1. Stock por categoria y producto\n2. Lotes proximos a vencer\n"
+                       "3. Ranking de donantes\n4. Total entregado por beneficiario\n"
+                       "5. Aprovechamiento y perdidas\n6. Donaciones por tipo de donante\n"
+                       "7. Resumen por producto\n8. Volver\nOpcion: ")
         if opcion == "1":
             reporteStock()
         elif opcion == "2":
-            listarProximosAVencer()
+            lotesProximos()
         elif opcion == "3":
             rankingDonantes()
         elif opcion == "4":
             totalPorBeneficiario()
         elif opcion == "5":
-            indicadoresGenerales()
+            aprovechamientoYPerdidas()
         elif opcion == "6":
-            donacionesPorTipoDonante()
+            donacionesPorTipo()
         elif opcion == "7":
             resumenPorProducto()
         elif opcion == "8":
             break
-        else:
-            print("Opcion no valida.")
 
 
 def menuPrincipal():
-    print(f"{'SISTEMA DE GESTION DE BANCO DE ALIMENTOS':^50}")
     while True:
-        print("\n===== MENU PRINCIPAL =====")
-        print("1. Registrar / gestionar donantes")
-        print("2. Registrar / gestionar beneficiarios")
-        print("3. Registrar productos")
-        print("4. Registrar donacion y lote")
-        print("5. Registrar entrega")
-        print("6. Consultar stock y vencimientos")
-        print("7. Generar reportes")
-        print("8. Salir")
-        opcion = input("Seleccione una opcion: ").strip()
+        opcion = input("\n===== BANCO DE ALIMENTOS =====\n1. Registrar / gestionar donantes\n"
+                       "2. Registrar / gestionar beneficiarios\n3. Registrar productos\n"
+                       "4. Registrar donacion y lote\n5. Registrar entrega\n"
+                       "6. Consultar stock y vencimientos\n7. Generar reportes\n8. Salir\nOpcion: ")
         if opcion == "1":
             menuDonantes()
         elif opcion == "2":
@@ -756,11 +498,8 @@ def menuPrincipal():
         elif opcion == "7":
             menuReportes()
         elif opcion == "8":
-            print("Gracias por usar el sistema. Hasta pronto!")
+            print("Hasta pronto!")
             break
-        else:
-            print("Opcion no valida.")
 
 
-# Programa principal
 menuPrincipal()
