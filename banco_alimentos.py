@@ -101,11 +101,11 @@ def leerFecha(mensaje):
 def aDias(fecha):
     """Convierte una fecha en numero de dias para poder restar fechas."""
     partes = fecha.split("-")
-    anio, mes, dia = int(partes[0]), int(partes[1]), int(partes[2])
-    diasAntes = (0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
-    if mes <= 2:
-        anio -= 1  # el 29 de febrero se cuenta desde marzo
-    return int(partes[0]) * 365 + anio // 4 - anio // 100 + anio // 400 + diasAntes[mes - 1] + dia
+    anio = int(partes[0])
+    mes = int(partes[1])
+    dia = int(partes[2])
+    diasAntes = (0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)  # dias del anio antes de cada mes
+    return anio * 365 + diasAntes[mes - 1] + dia
 
 
 def fechaHoy():
