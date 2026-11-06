@@ -403,7 +403,7 @@ class Movimiento(ABC):
     def fecha(self):
         return self.__fecha
 
-    # Mes del movimiento (AAAA-MM), se usa en los indicadores mensuales
+    # Mes del movimiento (AAAA-MM)
     @property
     def mes(self):
         return self.__fecha[:7]
@@ -680,7 +680,7 @@ class BancoAlimentos:
                 bajas.append((lote, lote.darDeBaja()))
         return bajas
 
-    # Tablas de pandas (DataFrame) que usan los reportes y los graficos
+    # Tablas de pandas (DataFrame) que usan los reportes
     def tablaDonaciones(self):
         filas = []
         for donacion in self.__donaciones.values():
@@ -836,7 +836,7 @@ class GestorArchivos:
             return False
 
 
-# Calcula los reportes e indicadores con pandas y los muestra en consola
+# Calcula los reportes con pandas y los muestra en consola
 class Reportes:
     def __init__(self, banco):
         self.__banco = banco
@@ -857,12 +857,6 @@ class Reportes:
 
     def porTipoDonante(self):
         return self.__sumarPor(self.__banco.tablaDonaciones(), "tipo", "cantidad")
-
-    # Stock que todavia se puede entregar (sin lotes vencidos)
-    def stockPorCat(self):
-        tabla = self.__banco.tablaLotes()
-        tabla = tabla[tabla["estado"] != "Vencido"]
-        return self.__sumarPor(tabla, "categoria", "disponible")
 
     def totales(self):
         lotes = self.__banco.tablaLotes()
