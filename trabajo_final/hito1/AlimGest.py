@@ -729,17 +729,46 @@ class GestorArchivos:
     def __init__(self, archivo):
         self.__archivo = archivo
         self.__omitidas = 0
+        self.__sinExcel = False
+        self.__origen = archivo
 
     @property
     def archivo(self):
         return self.__archivo
 
-    # Lee una hoja; si el archivo, la hoja o una columna no existen devuelve una tabla vacia
+    # De donde se cargaron los datos: el libro de Excel o los archivos CSV
+    @property
+    def origen(self):
+        return self.__origen
+
+    # pandas necesita la libreria openpyxl para el Excel; si falta, se usan archivos CSV
+    def __avisarCsv(self):
+        if not self.__sinExcel:
+            self.__sinExcel = True
+            self.__origen = "archivos CSV"
+            print("Aviso: pandas necesita la libreria openpyxl para usar el Excel (pip install openpyxl).")
+            print("Los datos se guardaran en archivos CSV: donantes.csv, lotes.csv, entregas.csv, etc.")
+
+    # Lee una tabla guardada en un archivo CSV (hoja.csv); si no existe devuelve una tabla vacia
+    def __leerCsv(self, hoja, columnas):
+        try:
+            tabla = pd.read_csv(f"{hoja}.csv")
+        except FileNotFoundError:
+            return pd.DataFrame(columns=columnas)
+        except ValueError:
+            return pd.DataFrame(columns=columnas)
+        self.__origen = "archivos CSV"
+        return tabla
+
+    # Lee una hoja del Excel (o su CSV); si la hoja o una columna no existen devuelve una tabla vacia
     def __leer(self, hoja, columnas):
         try:
             tabla = pd.read_excel(self.__archivo, sheet_name=hoja)
+        except ImportError:
+            self.__avisarCsv()
+            tabla = self.__leerCsv(hoja, columnas)
         except FileNotFoundError:
-            return pd.DataFrame(columns=columnas)
+            tabla = self.__leerCsv(hoja, columnas)
         except ValueError:
             return pd.DataFrame(columns=columnas)
         for columna in columnas:
@@ -810,30 +839,38 @@ class GestorArchivos:
             filas.append(objeto.aFila())
         return filas
 
-    def __escribir(self, excel, hoja, filas, columnas):
-        tabla = pd.DataFrame(filas, columns=columnas)
-        tabla.to_excel(excel, sheet_name=hoja, index=False)
-
-    # ExcelWriter permite guardar las seis hojas en un solo archivo
-    def guardar(self, banco):
+    # Una tabla (DataFrame) por hoja, con las columnas en el orden de COLS_*
+    def __tablas(self, banco):
         lotes = []
         for donacion in banco.donaciones.values():
             lotes += donacion.filasLotes()
-        try:
-            excel = pd.ExcelWriter(self.__archivo)
-            self.__escribir(excel, "donantes", self.__filas(banco.donantes.values()), COLS_DONANTE)
-            self.__escribir(excel, "beneficiarios", self.__filas(banco.beneficiarios.values()),
-                            COLS_BENEF)
-            self.__escribir(excel, "productos", self.__filas(banco.productos.values()), COLS_PRODUCTO)
-            self.__escribir(excel, "donaciones", self.__filas(banco.donaciones.values()),
-                            COLS_DONACION)
-            self.__escribir(excel, "lotes", lotes, COLS_LOTE)
-            self.__escribir(excel, "entregas", self.__filas(banco.entregas.values()), COLS_ENTREGA)
-            excel.close()
-            return True
-        except PermissionError:
-            print(f"Error: no se pudo guardar {self.__archivo}; cierrelo si esta abierto en Excel.")
-            return False
+        return {"donantes": pd.DataFrame(self.__filas(banco.donantes.values()), columns=COLS_DONANTE),
+                "beneficiarios": pd.DataFrame(self.__filas(banco.beneficiarios.values()),
+                                              columns=COLS_BENEF),
+                "productos": pd.DataFrame(self.__filas(banco.productos.values()), columns=COLS_PRODUCTO),
+                "donaciones": pd.DataFrame(self.__filas(banco.donaciones.values()),
+                                           columns=COLS_DONACION),
+                "lotes": pd.DataFrame(lotes, columns=COLS_LOTE),
+                "entregas": pd.DataFrame(self.__filas(banco.entregas.values()), columns=COLS_ENTREGA)}
+
+    # ExcelWriter guarda las seis hojas en un solo archivo; sin openpyxl se usa un CSV por tabla
+    def guardar(self, banco):
+        tablas = self.__tablas(banco)
+        if not self.__sinExcel:
+            try:
+                excel = pd.ExcelWriter(self.__archivo)
+                for hoja in tablas:
+                    tablas[hoja].to_excel(excel, sheet_name=hoja, index=False)
+                excel.close()
+                return True
+            except ImportError:
+                self.__avisarCsv()
+            except PermissionError:
+                print(f"Error: no se pudo guardar {self.__archivo}; cierrelo si esta abierto en Excel.")
+                return False
+        for hoja in tablas:
+            tablas[hoja].to_csv(f"{hoja}.csv", index=False)
+        return True
 
 
 # Calcula los reportes con pandas y los muestra en consola
@@ -974,9 +1011,9 @@ class Aplicacion:
         self.__archivos.guardar(self.__banco)
 
     def iniciar(self):
-        omitidas = self.__archivos.cargar(self.__banco)
         print("===== AlimGest: Sistema de Gestion de Banco de Alimentos =====")
-        print(f"Datos cargados de {self.__archivos.archivo}: {len(self.__banco.donantes)} donantes, "
+        omitidas = self.__archivos.cargar(self.__banco)
+        print(f"Datos cargados de {self.__archivos.origen}: {len(self.__banco.donantes)} donantes, "
               f"{len(self.__banco.beneficiarios)} beneficiarios, {len(self.__banco.productos)} "
               f"productos,\n{len(self.__banco.donaciones)} donaciones ({len(self.__banco.lotes)} "
               f"lotes) y {len(self.__banco.entregas)} entregas.")
