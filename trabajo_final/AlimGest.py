@@ -13,7 +13,8 @@ MAX_CANT = 1000000
 ANCHO_GRAF = 40
 BARRA = "█"
 
-# Columnas de cada archivo CSV
+# Archivo Excel con los datos y columnas de cada una de sus hojas
+ARCHIVO = "AlimGest.xlsx"
 COLS_DONANTE = ["codigo", "nombre", "tipo", "contacto"]
 COLS_BENEF = ["codigo", "nombre", "tipo", "personas"]
 COLS_PRODUCTO = ["codigo", "nombre", "categoria", "unidad"]
@@ -157,7 +158,7 @@ class Entidad(ABC):
     def setNombre(self, nombre):
         self.__nombre = nombre
 
-    # Cada clase hija decide que datos van en su fila del CSV
+    # Cada clase hija decide que datos van en su fila del Excel
     @abstractmethod
     def aFila(self):
         pass
@@ -548,24 +549,26 @@ class BancoAlimentos:
                                             "dias", "estado", "recibido", "disponible", "perdido"])
 
 
-# Lee y escribe los datos del banco en archivos CSV con pandas
+# Lee y escribe los datos del banco en un archivo Excel (una hoja por tabla) con pandas
 class GestorArchivos:
-    # Lee un CSV; si todavia no existe devuelve una tabla vacia
-    def __leer(self, nombre):
+    # Lee una hoja del Excel; si el archivo o la hoja no existen devuelve una tabla vacia
+    def __leer(self, hoja):
         try:
-            return pd.read_csv(nombre + ".csv")
+            return pd.read_excel(ARCHIVO, sheet_name=hoja)
         except FileNotFoundError:
+            return pd.DataFrame()
+        except ValueError:
             return pd.DataFrame()
 
     # Polimorfismo: cada objeto sabe convertirse en fila con aFila()
-    def __escribir(self, nombre, objetos, columnas):
+    def __escribir(self, excel, hoja, objetos, columnas):
         filas = []
         for objeto in objetos:
             filas.append(objeto.aFila())
         tabla = pd.DataFrame(filas, columns=columnas)
-        tabla.to_csv(nombre + ".csv", sep=",", index=False)
+        tabla.to_excel(excel, sheet_name=hoja, index=False)
 
-    # Crea los objetos a partir de los CSV; devuelve cuantas filas no se pudieron cargar
+    # Crea los objetos a partir de las hojas del Excel; devuelve cuantas filas no se pudieron cargar
     def cargar(self, banco):
         omitidas = 0
         tabla = self.__leer("donantes")
@@ -609,13 +612,16 @@ class GestorArchivos:
                                      float(tabla.loc[i, "cantidad"]))
         return omitidas
 
+    # ExcelWriter permite guardar las seis hojas en un solo archivo
     def guardar(self, banco):
-        self.__escribir("donantes", banco.getDonantes().values(), COLS_DONANTE)
-        self.__escribir("beneficiarios", banco.getBeneficiarios().values(), COLS_BENEF)
-        self.__escribir("productos", banco.getProductos().values(), COLS_PRODUCTO)
-        self.__escribir("lotes", banco.getLotes().values(), COLS_LOTE)
-        self.__escribir("donaciones", banco.getDonaciones(), COLS_DONACION)
-        self.__escribir("entregas", banco.getEntregas(), COLS_ENTREGA)
+        excel = pd.ExcelWriter(ARCHIVO)
+        self.__escribir(excel, "donantes", banco.getDonantes().values(), COLS_DONANTE)
+        self.__escribir(excel, "beneficiarios", banco.getBeneficiarios().values(), COLS_BENEF)
+        self.__escribir(excel, "productos", banco.getProductos().values(), COLS_PRODUCTO)
+        self.__escribir(excel, "lotes", banco.getLotes().values(), COLS_LOTE)
+        self.__escribir(excel, "donaciones", banco.getDonaciones(), COLS_DONACION)
+        self.__escribir(excel, "entregas", banco.getEntregas(), COLS_ENTREGA)
+        excel.close()
 
 
 # Calcula los reportes con pandas y los muestra en consola
